@@ -1,6 +1,5 @@
-// characters.js
-// CHARACTERS now include inline SVG strings in `imageSVG` so images don't need to be loaded from files.
-
+// characters.js (inline SVGs kept, unchanged from earlier)
+// Roster of 10 LEGO Ninjago characters with imageSVG, high HP and specialRequired.
 const CHARACTERS = [
   {
     id: 'lloyd',
