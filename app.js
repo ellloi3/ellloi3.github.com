@@ -1,5 +1,5 @@
 // app.js
-// Updated to support a visual arena with animation using image art for each character.
+// Uses inline SVG strings in CHARACTERS.imageSVG and creates data URIs for thumbnails and arena images.
 
 (() => {
   // DOM references
@@ -29,7 +29,7 @@
   const specialBtn = document.getElementById('specialBtn');
   const autoBtn = document.getElementById('autoBtn');
 
-  // Visual arena elements
+  // Visual arena elements (img tags in index.html)
   const playerArt = document.getElementById('playerArt');
   const aiArt = document.getElementById('aiArt');
   const impact = document.getElementById('impact');
@@ -54,13 +54,20 @@
   function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
   function randInt(min, max){ return Math.floor(Math.random()*(max-min+1)) + min; }
 
+  // helper: create data URI from SVG string
+  function svgToDataUri(svgString) {
+    if (!svgString) return '';
+    return 'data:image/svg+xml;utf8,' + encodeURIComponent(svgString.trim());
+  }
+
   // Initialize select grid from CHARACTERS (from characters.js)
   function renderCharacters() {
     charactersGrid.innerHTML = '';
     CHARACTERS.forEach(c => {
       const card = document.createElement('div');
       card.className = 'card';
-      const imgHtml = c.image ? `<img src="${c.image}" alt="${c.name}" style="width:56px;height:56px;object-fit:contain;border-radius:8px">` : `<div class="avatar ${c.colorClass}">${c.short}</div>`;
+      const imgSrc = c.imageSVG ? svgToDataUri(c.imageSVG) : '';
+      const imgHtml = imgSrc ? `<img src="${imgSrc}" alt="${c.name}" style="width:56px;height:56px;object-fit:contain;border-radius:8px">` : `<div class="avatar ${c.colorClass}">${c.short}</div>`;
       card.innerHTML = `
         ${imgHtml}
         <div class="info">
@@ -97,7 +104,6 @@
     };
 
     // render UI
-    // small info avatars
     playerAvatar.className = `avatar ${playerChar.colorClass}`;
     playerAvatar.textContent = playerChar.short;
     aiAvatar.className = `avatar ${aiChar.colorClass}`;
@@ -105,9 +111,9 @@
     playerNameEl.textContent = playerChar.name;
     aiNameEl.textContent = aiChar.name;
 
-    // visual arena images
-    if (playerChar.image) playerArt.src = playerChar.image; else playerArt.src = '';
-    if (aiChar.image) aiArt.src = aiChar.image; else aiArt.src = '';
+    // set visual arena images using data URIs built from the inline SVG
+    playerArt.src = playerChar.imageSVG ? svgToDataUri(playerChar.imageSVG) : '';
+    aiArt.src = aiChar.imageSVG ? svgToDataUri(aiChar.imageSVG) : '';
 
     updateHPUI();
     appendLog(`<div>Opponent: <strong>${aiChar.name}</strong> has been chosen by the AI.</div>`);
@@ -122,7 +128,6 @@
     playerHPText.textContent = `HP: ${Math.max(0, state.playerHP)} / ${playerChar.maxHP}`;
     aiHPText.textContent = `HP: ${Math.max(0, state.aiHP)} / ${aiChar.maxHP}`;
 
-    // colorize HP bars on low health
     if (pPerc < 30) playerHPBar.style.background = 'linear-gradient(90deg,#f97316,#ef4444)';
     else playerHPBar.style.background = 'linear-gradient(90deg,#34d399,#10b981)';
     if (aPerc < 30) aiHPBar.style.background = 'linear-gradient(90deg,#f97316,#ef4444)';
@@ -132,14 +137,11 @@
   }
 
   function updateSpecialUI() {
-    // Player special availability
     const pReq = playerChar.specialRequired;
     const pHave = state.playerAttacks;
     const pReady = pHave >= pReq;
     specialBtn.disabled = !pReady;
     specialBtn.textContent = pReady ? `Special (Ready)` : `Special (${pHave}/${pReq})`;
-
-    // Auto button text remains
     autoBtn.textContent = state.autoMode ? 'Auto: ON' : 'Auto';
   }
 
@@ -152,7 +154,7 @@
   function appendLog(html) {
     const el = document.createElement('div');
     el.innerHTML = html;
-    battleLog.prepend(el); // newest on top
+    battleLog.prepend(el);
   }
 
   // Visual animation utilities
@@ -160,30 +162,22 @@
     const attackerImg = side === 'player' ? playerArt : aiArt;
     const defenderImg = side === 'player' ? aiArt : playerArt;
 
-    // add attack class to attacker and special class if special
     attackerImg.classList.remove('attack', 'special');
     defenderImg.classList.remove('hit');
-    void attackerImg.offsetWidth; // force reflow for repeated animations
+    void attackerImg.offsetWidth;
 
     if (isSpecial) attackerImg.classList.add('special');
-
-    // set attack class for direction
     if (side === 'player') attackerImg.classList.add('attack', 'player'); else attackerImg.classList.add('attack', 'ai');
 
-    // show impact slightly after lunge
     setTimeout(() => {
       defenderImg.classList.add('hit');
-      // brief impact flash in center
       impact.classList.add('show');
       impact.style.width = isSpecial ? '110px' : '70px';
       impact.style.height = isSpecial ? '110px' : '70px';
       impact.style.background = isSpecial ? 'radial-gradient(circle, rgba(255,240,160,0.95), rgba(255,160,60,0.08))' : 'radial-gradient(circle, rgba(255,255,255,0.9), rgba(255,255,255,0.05))';
-      setTimeout(() => {
-        impact.classList.remove('show');
-      }, 200);
+      setTimeout(() => impact.classList.remove('show'), 200);
     }, 180);
 
-    // clear classes after animation completes
     setTimeout(() => {
       attackerImg.classList.remove('attack', 'player', 'ai');
       defenderImg.classList.remove('hit');
@@ -198,13 +192,11 @@
     let roll = Math.random();
 
     if (aiHPPercent < 0.3 && roll < 0.6) return 'defend';
-
     if (state.aiAttacks >= aiChar.specialRequired) {
       if (playerHPPercent < 0.25 && roll < 0.75) return 'special';
       if (roll < 0.65) return 'attack';
       return 'special';
     }
-
     return (roll < 0.85) ? 'attack' : 'defend';
   }
 
@@ -212,20 +204,15 @@
   function playerAttack(isSpecial=false) {
     if (!state) return;
     if (state.turn !== 'player') return;
-
-    if (isSpecial) {
-      if (state.playerAttacks < playerChar.specialRequired) {
-        appendLog(`<em>Special not ready — you need ${playerChar.specialRequired - state.playerAttacks} more attack(s).</em>`);
-        // subtle UI nudge: briefly shake special button
-        specialBtn.classList.add('shake');
-        setTimeout(()=> specialBtn.classList.remove('shake'), 300);
-        return;
-      }
+    if (isSpecial && state.playerAttacks < playerChar.specialRequired) {
+      appendLog(`<em>Special not ready — you need ${playerChar.specialRequired - state.playerAttacks} more attack(s).</em>`);
+      specialBtn.classList.add('shake');
+      setTimeout(()=> specialBtn.classList.remove('shake'), 300);
+      return;
     }
 
     const dmg = calcDamage(playerChar, isSpecial);
     let finalDmg = dmg;
-
     if (state.aiDefend) {
       finalDmg = Math.round(finalDmg * 0.5);
       state.aiDefend = false;
@@ -233,31 +220,22 @@
     }
 
     state.aiHP -= finalDmg;
-
     if (isSpecial) {
       appendLog(`<strong>${playerChar.name}</strong> used SPECIAL and deals <strong>${finalDmg}</strong> damage!`);
-      state.playerAttacks = 0; // reset charge after special
+      state.playerAttacks = 0;
     } else {
       appendLog(`<strong>${playerChar.name}</strong> attacks and deals <strong>${finalDmg}</strong> damage!`);
       state.playerAttacks = (state.playerAttacks || 0) + 1;
     }
 
-    // animate
     animateAttack('player', isSpecial);
-
     updateHPUI();
     checkBattleEndThenProceed('player');
   }
 
   function checkBattleEndThenProceed(lastActor) {
-    if (state.aiHP <= 0) {
-      endBattle(true);
-      return;
-    }
-    if (state.playerHP <= 0) {
-      endBattle(false);
-      return;
-    }
+    if (state.aiHP <= 0) { endBattle(true); return; }
+    if (state.playerHP <= 0) { endBattle(false); return; }
 
     if (lastActor === 'player') {
       state.turn = 'ai';
@@ -277,10 +255,7 @@
   function aiTurn() {
     if (!state || state.turn !== 'ai') return;
     let action = aiChooseAction();
-
-    if (action === 'special' && state.aiAttacks < aiChar.specialRequired) {
-      action = 'attack';
-    }
+    if (action === 'special' && state.aiAttacks < aiChar.specialRequired) action = 'attack';
 
     if (action === 'defend') {
       appendLog(`<em>${aiChar.name} defends and braces for impact.</em>`);
@@ -294,10 +269,7 @@
       state.playerHP -= dmg;
       appendLog(`<strong>${aiChar.name}</strong> attacks and deals <strong>${dmg}</strong> damage!`);
       state.aiAttacks = (state.aiAttacks || 0) + 1;
-
-      // animate
       animateAttack('ai', false);
-
       updateHPUI();
       checkBattleEndThenProceed('ai');
       return;
@@ -308,10 +280,7 @@
       state.playerHP -= dmg;
       appendLog(`<strong>${aiChar.name}</strong> uses SPECIAL and deals <strong>${dmg}</strong> damage!`);
       state.aiAttacks = 0;
-
-      // animate
       animateAttack('ai', true);
-
       updateHPUI();
       checkBattleEndThenProceed('ai');
       return;
@@ -339,16 +308,8 @@
 
   backToHome.addEventListener('click', () => showScreen('home'));
 
-  attackBtn.addEventListener('click', () => {
-    if (!state) return;
-    playerAttack(false);
-  });
-
-  specialBtn.addEventListener('click', () => {
-    if (!state) return;
-    playerAttack(true);
-  });
-
+  attackBtn.addEventListener('click', () => { if (!state) return; playerAttack(false); });
+  specialBtn.addEventListener('click', () => { if (!state) return; playerAttack(true); });
   autoBtn.addEventListener('click', () => {
     if (!state) return;
     state.autoMode = !state.autoMode;
@@ -363,20 +324,14 @@
     updateSpecialUI();
   });
 
-  winToSelect.addEventListener('click', () => {
-    renderCharacters();
-    showScreen('select');
-  });
-  loseToSelect.addEventListener('click', () => {
-    renderCharacters();
-    showScreen('select');
-  });
+  winToSelect.addEventListener('click', () => { renderCharacters(); showScreen('select'); });
+  loseToSelect.addEventListener('click', () => { renderCharacters(); showScreen('select'); });
 
   // initial render
   renderCharacters();
   showScreen('home');
 
-  // Helpful: keyboard shortcuts for quicker testing (optional)
+  // keyboard shortcuts
   document.addEventListener('keydown', (e) => {
     if (!state) return;
     if (screens.battle.classList.contains('visible')) {
