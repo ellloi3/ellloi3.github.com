@@ -1,4 +1,3 @@
-/* styles.css (updated: added damage popup styles) */
 :root{
   --bg1: #0f172a;
   --bg2: #0b1220;
@@ -157,7 +156,7 @@ p{margin:0 0 18px 0;color:var(--muted)}
 /* small helpers */
 .shake{ animation: hit-shake .28s ease; }
 
-/* Damage popup styles */
+/* Damage popup */
 .damage-popup{
   position:absolute;
   pointer-events:none;
@@ -175,12 +174,6 @@ p{margin:0 0 18px 0;color:var(--muted)}
   color: #ffd86b;
   font-size:26px;
   text-shadow: 0 8px 22px rgba(0,0,0,0.6), 0 2px 0 rgba(0,0,0,0.25);
-  transform: translateY(0) scale(1);
-}
-.damage-popup.crit{
-  color: #ff6b6b;
-  text-shadow: 0 10px 26px rgba(0,0,0,0.7);
-  transform: translateY(0) scale(1.08);
 }
 @keyframes popup-float {
   0% { opacity:1; transform: translateY(0) scale(1); }
@@ -188,7 +181,43 @@ p{margin:0 0 18px 0;color:var(--muted)}
   100% { opacity:0; transform: translateY(-68px) scale(1.12); }
 }
 
-/* Colors for avatars placeholders */
+/* Achievements */
+.achievements-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+  gap:12px;
+  margin-top:12px;
+}
+.achievement{
+  background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.00));
+  border-radius:10px;padding:12px;border:1px solid rgba(255,255,255,0.03);
+  display:flex;gap:12px;align-items:center;
+}
+.achievement .badge{
+  width:64px;height:64px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px;color:#07203a;
+}
+.achievement.locked{opacity:0.45;filter:grayscale(0.35);}
+.achievement .meta{flex:1}
+.achievement .meta .title{font-weight:800}
+.achievement .meta .desc{font-size:13px;color:var(--muted);margin-top:6px}
+
+/* unlocked badge styles */
+.badge.gold{background:linear-gradient(180deg,#ffd86b,#f59e0b)}
+.badge.silver{background:linear-gradient(180deg,#e6e6e6,#bfbfbf)}
+.badge.bronze{background:linear-gradient(180deg,#ffd7b5,#f59e0b)}
+
+/* Achievement popup toast */
+.achievement-toast{
+  position:fixed;
+  right:20px;
+  bottom:20px;
+  background:linear-gradient(180deg,#111827,#0b1220);
+  border:1px solid rgba(255,255,255,0.06);
+  padding:12px 16px;border-radius:10px;color:#fff;z-index:9999;box-shadow:0 10px 30px rgba(0,0,0,0.6);
+  transform:translateY(18px);opacity:0;transition:all .32s cubic-bezier(.2,.9,.2,1);
+}
+.achievement-toast.show{transform:translateY(0);opacity:1}
+
 .avatar.color-lloyd{background:linear-gradient(180deg,#a7f3d0,#34d399)}
 .avatar.color-kai{background:linear-gradient(180deg,#fecaca,#f97316)}
 .avatar.color-jay{background:linear-gradient(180deg,#bfdbfe,#3b82f6)}
@@ -207,4 +236,5 @@ p{margin:0 0 18px 0;color:var(--muted)}
   .log{height:120px}
   .visual-arena{height:120px}
   .fighter-art{width:45%}
+  .achievements-grid{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
 }
