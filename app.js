@@ -1,8 +1,5 @@
 // app.js
-// Updated to support much higher HP per character (1000-1400) and to require
-// a character-specific number of normal attacks before that character can use Special.
-// Special becomes available only after performing `specialRequired` attacks,
-// and using Special resets the attack counter for that character.
+// Updated to support a visual arena with animation using image art for each character.
 
 (() => {
   // DOM references
@@ -32,6 +29,11 @@
   const specialBtn = document.getElementById('specialBtn');
   const autoBtn = document.getElementById('autoBtn');
 
+  // Visual arena elements
+  const playerArt = document.getElementById('playerArt');
+  const aiArt = document.getElementById('aiArt');
+  const impact = document.getElementById('impact');
+
   // Win/Lose controls
   const winToSelect = document.getElementById('winToSelect');
   const loseToSelect = document.getElementById('loseToSelect');
@@ -58,8 +60,9 @@
     CHARACTERS.forEach(c => {
       const card = document.createElement('div');
       card.className = 'card';
+      const imgHtml = c.image ? `<img src="${c.image}" alt="${c.name}" style="width:56px;height:56px;object-fit:contain;border-radius:8px">` : `<div class="avatar ${c.colorClass}">${c.short}</div>`;
       card.innerHTML = `
-        <div class="avatar ${c.colorClass}">${c.short}</div>
+        ${imgHtml}
         <div class="info">
           <div class="name">${c.name}</div>
           <div class="desc">HP ${c.maxHP} • ATK ${c.attackMin}-${c.attackMax} • Special after ${c.specialRequired} attacks</div>
@@ -94,12 +97,17 @@
     };
 
     // render UI
+    // small info avatars
     playerAvatar.className = `avatar ${playerChar.colorClass}`;
     playerAvatar.textContent = playerChar.short;
     aiAvatar.className = `avatar ${aiChar.colorClass}`;
     aiAvatar.textContent = aiChar.short;
     playerNameEl.textContent = playerChar.name;
     aiNameEl.textContent = aiChar.name;
+
+    // visual arena images
+    if (playerChar.image) playerArt.src = playerChar.image; else playerArt.src = '';
+    if (aiChar.image) aiArt.src = aiChar.image; else aiArt.src = '';
 
     updateHPUI();
     appendLog(`<div>Opponent: <strong>${aiChar.name}</strong> has been chosen by the AI.</div>`);
@@ -147,23 +155,56 @@
     battleLog.prepend(el); // newest on top
   }
 
+  // Visual animation utilities
+  function animateAttack(side, isSpecial=false) {
+    const attackerImg = side === 'player' ? playerArt : aiArt;
+    const defenderImg = side === 'player' ? aiArt : playerArt;
+
+    // add attack class to attacker and special class if special
+    attackerImg.classList.remove('attack', 'special');
+    defenderImg.classList.remove('hit');
+    void attackerImg.offsetWidth; // force reflow for repeated animations
+
+    if (isSpecial) attackerImg.classList.add('special');
+
+    // set attack class for direction
+    if (side === 'player') attackerImg.classList.add('attack', 'player'); else attackerImg.classList.add('attack', 'ai');
+
+    // show impact slightly after lunge
+    setTimeout(() => {
+      defenderImg.classList.add('hit');
+      // brief impact flash in center
+      impact.classList.add('show');
+      impact.style.width = isSpecial ? '110px' : '70px';
+      impact.style.height = isSpecial ? '110px' : '70px';
+      impact.style.background = isSpecial ? 'radial-gradient(circle, rgba(255,240,160,0.95), rgba(255,160,60,0.08))' : 'radial-gradient(circle, rgba(255,255,255,0.9), rgba(255,255,255,0.05))';
+      setTimeout(() => {
+        impact.classList.remove('show');
+      }, 200);
+    }, 180);
+
+    // clear classes after animation completes
+    setTimeout(() => {
+      attackerImg.classList.remove('attack', 'player', 'ai');
+      defenderImg.classList.remove('hit');
+      attackerImg.classList.remove('special');
+    }, 700);
+  }
+
   // AI decision function (uses attack count restriction for special)
   function aiChooseAction() {
     const aiHPPercent = state.aiHP / aiChar.maxHP;
     const playerHPPercent = state.playerHP / playerChar.maxHP;
     let roll = Math.random();
 
-    // If AI has defense incentive
     if (aiHPPercent < 0.3 && roll < 0.6) return 'defend';
 
-    // If AI has enough attacks to use special and conditions are favorable
     if (state.aiAttacks >= aiChar.specialRequired) {
       if (playerHPPercent < 0.25 && roll < 0.75) return 'special';
       if (roll < 0.65) return 'attack';
       return 'special';
     }
 
-    // Not ready for special yet → prefer attack
     return (roll < 0.85) ? 'attack' : 'defend';
   }
 
@@ -172,10 +213,12 @@
     if (!state) return;
     if (state.turn !== 'player') return;
 
-    // Special use gating for player (double-check)
     if (isSpecial) {
       if (state.playerAttacks < playerChar.specialRequired) {
         appendLog(`<em>Special not ready — you need ${playerChar.specialRequired - state.playerAttacks} more attack(s).</em>`);
+        // subtle UI nudge: briefly shake special button
+        specialBtn.classList.add('shake');
+        setTimeout(()=> specialBtn.classList.remove('shake'), 300);
         return;
       }
     }
@@ -183,9 +226,8 @@
     const dmg = calcDamage(playerChar, isSpecial);
     let finalDmg = dmg;
 
-    // If AI is defending, reduce damage and clear defend
     if (state.aiDefend) {
-      finalDmg = Math.round(finalDmg * 0.5); // defend reduces incoming damage by 50%
+      finalDmg = Math.round(finalDmg * 0.5);
       state.aiDefend = false;
       appendLog(`<em>${aiChar.name} braces, reducing damage.</em>`);
     }
@@ -200,13 +242,15 @@
       state.playerAttacks = (state.playerAttacks || 0) + 1;
     }
 
+    // animate
+    animateAttack('player', isSpecial);
+
     updateHPUI();
     checkBattleEndThenProceed('player');
   }
 
   function checkBattleEndThenProceed(lastActor) {
     if (state.aiHP <= 0) {
-      // player won
       endBattle(true);
       return;
     }
@@ -215,17 +259,13 @@
       return;
     }
 
-    // switch to other turn
     if (lastActor === 'player') {
       state.turn = 'ai';
-      // AI acts after a short delay
       setTimeout(aiTurn, 700);
     } else {
       state.turn = 'player';
-      // if auto mode trigger next player action automatically
       if (state.autoMode) {
         setTimeout(() => {
-          // pick action for auto player: use special only if ready
           const pReady = state.playerAttacks >= playerChar.specialRequired;
           const choice = pReady ? ((Math.random() < 0.45) ? 'special' : 'attack') : 'attack';
           if (choice === 'special') playerAttack(true); else playerAttack(false);
@@ -238,7 +278,6 @@
     if (!state || state.turn !== 'ai') return;
     let action = aiChooseAction();
 
-    // Ensure AI doesn't attempt special if not charged (safety)
     if (action === 'special' && state.aiAttacks < aiChar.specialRequired) {
       action = 'attack';
     }
@@ -255,6 +294,10 @@
       state.playerHP -= dmg;
       appendLog(`<strong>${aiChar.name}</strong> attacks and deals <strong>${dmg}</strong> damage!`);
       state.aiAttacks = (state.aiAttacks || 0) + 1;
+
+      // animate
+      animateAttack('ai', false);
+
       updateHPUI();
       checkBattleEndThenProceed('ai');
       return;
@@ -264,18 +307,20 @@
       const dmg = calcDamage(aiChar, true);
       state.playerHP -= dmg;
       appendLog(`<strong>${aiChar.name}</strong> uses SPECIAL and deals <strong>${dmg}</strong> damage!`);
-      state.aiAttacks = 0; // reset AI charge after special
+      state.aiAttacks = 0;
+
+      // animate
+      animateAttack('ai', true);
+
       updateHPUI();
       checkBattleEndThenProceed('ai');
       return;
     }
 
-    // fallback
     checkBattleEndThenProceed('ai');
   }
 
   function endBattle(didPlayerWin) {
-    // clear autoMode
     state.autoMode = false;
     if (didPlayerWin) {
       winText.textContent = `You defeated ${aiChar.name}!`;
@@ -301,7 +346,6 @@
 
   specialBtn.addEventListener('click', () => {
     if (!state) return;
-    // Player special gating handled inside playerAttack
     playerAttack(true);
   });
 
@@ -310,7 +354,6 @@
     state.autoMode = !state.autoMode;
     autoBtn.textContent = state.autoMode ? 'Auto: ON' : 'Auto';
     if (state.autoMode && state.turn === 'player') {
-      // kick off automatic actions
       setTimeout(() => {
         const pReady = state.playerAttacks >= playerChar.specialRequired;
         const choice = pReady ? ((Math.random() < 0.35) ? 'special' : 'attack') : 'attack';
