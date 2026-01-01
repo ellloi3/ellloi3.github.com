@@ -1,9 +1,9 @@
-// app.js — major update: local accounts, shop, difficulty, coin rewards, upgrades per character
+// app.js — updated: leaderboard added (tracks totalEarned which is not reduced when spending)
 // Storage keys and helpers
 const STORAGE_KEY_USERS = 'ninjago_users_v1';
 const STORAGE_KEY_CURRENT = 'ninjago_current_user_v1';
 
-// Weapon definitions (5 weapons). Each weapon gives per-level additive damage to min/max.
+// Weapon definitions (5 weapons)
 const WEAPONS = [
   { id: 'sword', name: 'Katana', baseCost: 120, dmgMinPerLevel: 6, dmgMaxPerLevel: 10, desc: 'Balanced attack sword' },
   { id: 'nunchucks', name: 'Nunchucks', baseCost: 140, dmgMinPerLevel: 8, dmgMaxPerLevel: 12, desc: 'Faster strikes' },
@@ -11,7 +11,6 @@ const WEAPONS = [
   { id: 'staff', name: 'Staff', baseCost: 160, dmgMinPerLevel: 10, dmgMaxPerLevel: 14, desc: 'Heavy, powerful' },
   { id: 'dagger', name: 'Dagger', baseCost: 90, dmgMinPerLevel: 4, dmgMaxPerLevel: 8, desc: 'Quick but light' }
 ];
-// max level per weapon
 const MAX_WEAPON_LEVEL = 10;
 
 // Utilities: storage
@@ -46,13 +45,14 @@ function randomSalt() {
   return Math.random().toString(36).slice(2, 10);
 }
 
-// DOM refs used across app
+// DOM refs
 const screens = {
   auth: document.getElementById('auth'),
   home: document.getElementById('home'),
   select: document.getElementById('select'),
   battle: document.getElementById('battle'),
   shop: document.getElementById('shop'),
+  leaderboard: document.getElementById('leaderboard'),
   profile: document.getElementById('profile'),
   win: document.getElementById('win'),
   lose: document.getElementById('lose')
@@ -73,6 +73,7 @@ const userCoinsEl = document.getElementById('userCoins');
 const goSelect = document.getElementById('goSelect');
 const goShop = document.getElementById('goShop');
 const goProfile = document.getElementById('goProfile');
+const goLeaderboard = document.getElementById('goLeaderboard');
 const signOutBtn = document.getElementById('signOutBtn');
 
 // Select
@@ -104,6 +105,10 @@ const weaponsList = document.getElementById('weaponsList');
 const shopBack = document.getElementById('shopBack');
 const shopCoins = document.getElementById('shopCoins');
 
+// Leaderboard
+const leaderboardList = document.getElementById('leaderboardList');
+const leaderboardBack = document.getElementById('leaderboardBack');
+
 // Profile
 const profileUser = document.getElementById('profileUser');
 const profileCoins = document.getElementById('profileCoins');
@@ -118,12 +123,12 @@ const winText = document.getElementById('winText');
 const loseText = document.getElementById('loseText');
 
 // State
-let users = loadUsers(); // object keyed by username
-let currentUser = loadCurrent() || ''; // username string
-let session = null; // currently logged-in user object (reference to users[currentUser])
+let users = loadUsers();
+let currentUser = loadCurrent() || '';
+let session = null; // reference to users[currentUser]
 let playerChar = null;
 let aiChar = null;
-let state = null; // battle state: playerHP, aiHP, playerAttacks, aiAttacks, autoMode, aiDefend
+let state = null;
 let selectedDifficulty = Number(difficultySelect.value) || 5;
 
 // Helper: show/hide screens
@@ -163,16 +168,14 @@ signupBtn.addEventListener('click', async () => {
   }
   const salt = randomSalt();
   const hash = await hashPassword(password, salt);
-  // create initial user object
+  const startingCoins = 500;
   const newUser = {
     passwordHash: hash,
     salt,
-    coins: 500, // starting coins
-    // upgrades: per-character per-weapon levels
+    coins: startingCoins,      // current balance
+    totalEarned: startingCoins, // all-time earned (counts starting coins)
     upgrades: {}, // { charId: { weaponId: level } }
-    settings: {
-      difficulty: 5
-    }
+    settings: { difficulty: 5 }
   };
   users[username] = newUser;
   saveUsers(users);
@@ -220,7 +223,6 @@ deleteAccountBtn.addEventListener('click', () => {
 
 // Navigation handlers
 goSelect.addEventListener('click', () => {
-  // restore difficulty from settings
   if (session && session.settings && session.settings.difficulty) difficultySelect.value = session.settings.difficulty;
   renderCharacters();
   showScreen('select');
@@ -233,9 +235,11 @@ goShop.addEventListener('click', () => {
 });
 shopBack.addEventListener('click', () => showScreen('home'));
 goProfile.addEventListener('click', () => { renderProfile(); showScreen('profile'); });
-profileBack.addEventListener('click', () => showScreen('home'));
 
-// Difficulty selector — save to session settings
+// Leaderboard nav
+goLeaderboard.addEventListener('click', () => { renderLeaderboard(); showScreen('leaderboard'); });
+leaderboardBack.addEventListener('click', () => showScreen('home'));
+
 difficultySelect.addEventListener('change', () => {
   selectedDifficulty = Number(difficultySelect.value);
   if (session) {
@@ -267,7 +271,6 @@ function renderCharacters() {
       </div>
     `;
     card.addEventListener('click', () => {
-      // Save chosen difficulty to session
       if (session) {
         session.settings = session.settings || {};
         session.settings.difficulty = Number(difficultySelect.value);
@@ -280,7 +283,7 @@ function renderCharacters() {
   });
 }
 
-// ---- Shop logic ----
+// ---- Shop logic (unchanged) ----
 function populateShopCharSelect() {
   shopSelectChar.innerHTML = '';
   CHARACTERS.forEach(c => {
@@ -289,7 +292,6 @@ function populateShopCharSelect() {
     shopSelectChar.appendChild(opt);
   });
   shopSelectChar.addEventListener('change', renderWeaponsForShop);
-  // init selection
   shopSelectChar.value = CHARACTERS[0].id;
   shopCoins.textContent = session ? session.coins : 0;
 }
@@ -309,8 +311,6 @@ function setUserUpgradeLevel(username, charId, weaponId, level) {
   u.upgrades[charId][weaponId] = level;
   saveUsers(users);
 }
-
-// cost formula: baseCost * (nextLevel) * difficulty multiplier ??? We'll keep base scaling only by level
 function costToBuyNext(weapon, currentLevel) {
   const next = currentLevel + 1;
   return Math.round(weapon.baseCost * next * 1.0);
@@ -338,7 +338,6 @@ function renderWeaponsForShop() {
         <button class="primary buyBtn" data-weapon="${w.id}" ${nextCost && session.coins >= nextCost ? '' : (nextCost ? 'disabled' : 'disabled')}>${ nextCost ? 'Buy +1' : 'Full' }</button>
       </div>
     `;
-    // buy handler
     const btn = card.querySelector('.buyBtn');
     btn && btn.addEventListener('click', () => {
       const lvl = getUserUpgradeLevel(currentUser, charId, w.id);
@@ -346,6 +345,7 @@ function renderWeaponsForShop() {
       const cost = costToBuyNext(w, lvl);
       if (session.coins < cost) { alert('Not enough coins'); return; }
       session.coins -= cost;
+      // spending does NOT reduce totalEarned — totalEarned tracks lifetime earned, not balance
       setUserUpgradeLevel(currentUser, charId, w.id, lvl + 1);
       users[currentUser] = session;
       saveUsers(users);
@@ -364,7 +364,6 @@ function renderProfile() {
   profileUser.textContent = currentUser;
   profileCoins.textContent = session.coins;
   profileUpgrades.innerHTML = '';
-  // show for each character, their upgrades
   CHARACTERS.forEach(c => {
     const card = document.createElement('div');
     card.className = 'card';
@@ -384,16 +383,43 @@ function renderProfile() {
   });
 }
 
-// ---- Battle logic: apply upgrades and difficulty multipliers and coin rewards ----
+// ---- Leaderboard rendering ----
+function renderLeaderboard() {
+  leaderboardList.innerHTML = '';
+  // build array of users with totalEarned (missing -> 0)
+  const arr = Object.keys(users).map(username => {
+    const u = users[username];
+    return {
+      username,
+      coins: u.coins || 0,
+      totalEarned: u.totalEarned || 0
+    };
+  });
+  // sort by totalEarned desc
+  arr.sort((a, b) => b.totalEarned - a.totalEarned);
+  if (arr.length === 0) {
+    leaderboardList.innerHTML = '<div class="muted">No players yet.</div>';
+    return;
+  }
+  arr.forEach((u, idx) => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <div style="flex:1">
+        <div class="name">${idx + 1}. ${u.username}</div>
+        <div class="muted">Total earned: <strong>${u.totalEarned}</strong> coins</div>
+        <div class="muted">Current balance: <strong>${u.coins}</strong></div>
+      </div>
+    `;
+    leaderboardList.appendChild(card);
+  });
+}
 
-// compute player's effective stats for chosen character given user's upgrades and chosen weapon levels
+// ---- Battle logic: computeEffectiveCharStats, startBattle, etc. ----
 function computeEffectiveCharStats(char, username) {
-  // copy base
   const base = Object.assign({}, char);
-  // apply per-character upgrades from session
   let up = (users[username] && users[username].upgrades && users[username].upgrades[char.id]) || {};
-  // aggregate bonuses from all weapons levels on this character
-  let addMin = 0, addMax = 0, specialMulAdd = 0;
+  let addMin = 0, addMax = 0;
   WEAPONS.forEach(w => {
     const lvl = up[w.id] || 0;
     addMin += w.dmgMinPerLevel * lvl;
@@ -401,42 +427,33 @@ function computeEffectiveCharStats(char, username) {
   });
   base.attackMin = (base.attackMin || 0) + addMin;
   base.attackMax = (base.attackMax || 0) + addMax;
-  // keep other fields same
   return base;
 }
 
-// battle reward calculation
 function coinsRewardForWin(baseReward = 100, difficulty = 5) {
-  // reward scales with difficulty (linear) and a small random bonus
   const mult = difficulty;
   const bonus = Math.floor(Math.random() * (difficulty * 5));
   return Math.max(10, Math.round(baseReward * mult + bonus));
 }
 
-// battle: startBattle, ui updates, etc. Much of earlier battle logic reused and adapted to include difficulty affecting AI strength
 function onSelectCharacter(id) {
   playerChar = CHARACTERS.find(ch => ch.id === id);
   startBattle();
 }
 
 function startBattle() {
-  // AI chooses random opponent not same
   const possible = CHARACTERS.filter(c => c.id !== playerChar.id);
   aiChar = possible[Math.floor(Math.random() * possible.length)];
 
-  // Effective stats (apply upgrades for current user)
   const effectivePlayerChar = session ? computeEffectiveCharStats(playerChar, currentUser) : playerChar;
-  const effectiveAIChar = aiChar; // will apply difficulty scaling below
+  const effectiveAIChar = aiChar;
 
-  // difficulty from session.settings or global selector
   const difficulty = session && session.settings && session.settings.difficulty ? session.settings.difficulty : Number(difficultySelect.value);
   selectedDifficulty = Number(difficulty);
 
-  // AI scaling: increase AI attack ranges proportional to difficulty (and slightly increase HP)
-  const aiAttackScale = 1 + (selectedDifficulty - 1) * 0.07; // each level ≈ +7% attack
-  const aiHPScale = 1 + (selectedDifficulty - 1) * 0.02; // small HP increase per level
+  const aiAttackScale = 1 + (selectedDifficulty - 1) * 0.07;
+  const aiHPScale = 1 + (selectedDifficulty - 1) * 0.02;
 
-  // create battle state
   state = {
     playerHP: effectivePlayerChar.maxHP,
     aiHP: Math.round(effectiveAIChar.maxHP * aiHPScale),
@@ -455,7 +472,6 @@ function startBattle() {
     }
   };
 
-  // render UI
   playerAvatar.className = `avatar ${playerChar.colorClass}`;
   playerAvatar.textContent = playerChar.short;
   aiAvatar.className = `avatar ${aiChar.colorClass}`;
@@ -463,7 +479,6 @@ function startBattle() {
   playerNameEl.textContent = playerChar.name;
   aiNameEl.textContent = aiChar.name;
 
-  // images
   if (playerChar.imageSVG) playerArt.src = svgToDataUri(playerChar.imageSVG); else playerArt.src = '';
   if (aiChar.imageSVG) aiArt.src = svgToDataUri(aiChar.imageSVG); else aiArt.src = '';
 
@@ -538,14 +553,12 @@ function animateAttack(side, isSpecial=false) {
   }, 700);
 }
 
-// AI decision (considers difficulty by acting slightly smarter at high difficulties)
 function aiChooseAction() {
   const aiHPPercent = state.aiHP / state.aiEffectiveChar.maxHP;
   const playerHPPercent = state.playerHP / state.playerEffectiveChar.maxHP;
   let roll = Math.random();
-  // difficulty bias: higher difficulty => less likely to defend and more likely to special when advantageous
   const diff = state.difficulty;
-  const defendBias = 0.6 - (diff * 0.04); // lower at higher diff
+  const defendBias = 0.6 - (diff * 0.04);
   const specialBias = 0.4 + (diff * 0.05);
 
   if (aiHPPercent < 0.3 && roll < defendBias) return 'defend';
@@ -557,7 +570,6 @@ function aiChooseAction() {
   return (roll < (0.85 - diff*0.03)) ? 'attack' : 'defend';
 }
 
-// Player action handlers (check special gating)
 function playerAttack(isSpecial=false) {
   if (!state) return;
   if (state.turn !== 'player') return;
@@ -646,23 +658,23 @@ function aiTurn() {
 }
 
 function endBattle(didPlayerWin) {
-  // reward logic if user signed in
   if (session) {
     const diff = state.difficulty || 5;
     if (didPlayerWin) {
-      const reward = coinsRewardForWin(50, diff); // base 50
+      const reward = coinsRewardForWin(50, diff);
       session.coins = (session.coins || 0) + reward;
+      session.totalEarned = (session.totalEarned || 0) + reward;
       appendLog(`<em>You earned ${reward} coins for this victory.</em>`);
       alert(`Victory! You earned ${reward} coins.`);
     } else {
       const consolation = Math.max(5, Math.round(5 * (state.difficulty || 1)));
       session.coins = (session.coins || 0) + consolation;
+      session.totalEarned = (session.totalEarned || 0) + consolation;
       appendLog(`<em>Consolation: ${consolation} coins.</em>`);
       alert(`Defeat. You received ${consolation} consolation coins.`);
     }
     users[currentUser] = session;
     saveUsers(users);
-    // update UI numbers
     userCoinsEl.textContent = session.coins;
     shopCoins.textContent = session.coins;
     profileCoins.textContent = session.coins;
@@ -715,6 +727,5 @@ document.addEventListener('keydown', (e) => {
   currentUser = loadCurrent();
   refreshAuthUI();
   renderCharacters();
-  // fill shop select initially
   populateShopCharSelect();
 })();
