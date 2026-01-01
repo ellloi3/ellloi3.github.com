@@ -1,3 +1,4 @@
+/* styles.css (updated: added damage popup styles) */
 :root{
   --bg1: #0f172a;
   --bg2: #0b1220;
@@ -75,7 +76,7 @@ p{margin:0 0 18px 0;color:var(--muted)}
 .auth-card input{width:100%;padding:8px;margin-top:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit}
 .shop-top{display:flex;justify-content:space-between;align-items:center;gap:10px}
 
-/* Battle styles (same as previous) */
+/* Battle styles */
 .arena{display:flex;gap:18px;align-items:center;justify-content:space-between}
 .fighter{width:34%;background:var(--card);padding:12px;border-radius:10px;display:flex;gap:10px;align-items:center;flex-direction:column}
 .fighter.player{align-items:flex-start}
@@ -155,6 +156,37 @@ p{margin:0 0 18px 0;color:var(--muted)}
 
 /* small helpers */
 .shake{ animation: hit-shake .28s ease; }
+
+/* Damage popup styles */
+.damage-popup{
+  position:absolute;
+  pointer-events:none;
+  transform-origin:center;
+  font-weight:800;
+  font-size:20px;
+  color:#fff;
+  text-shadow: 0 6px 18px rgba(0,0,0,0.6), 0 1px 0 rgba(0,0,0,0.2);
+  opacity:1;
+  will-change: transform, opacity;
+  z-index:50;
+  animation: popup-float 900ms cubic-bezier(.2,.8,.2,1) forwards;
+}
+.damage-popup.special{
+  color: #ffd86b;
+  font-size:26px;
+  text-shadow: 0 8px 22px rgba(0,0,0,0.6), 0 2px 0 rgba(0,0,0,0.25);
+  transform: translateY(0) scale(1);
+}
+.damage-popup.crit{
+  color: #ff6b6b;
+  text-shadow: 0 10px 26px rgba(0,0,0,0.7);
+  transform: translateY(0) scale(1.08);
+}
+@keyframes popup-float {
+  0% { opacity:1; transform: translateY(0) scale(1); }
+  60% { opacity:0.95; transform: translateY(-36px) scale(1.05); }
+  100% { opacity:0; transform: translateY(-68px) scale(1.12); }
+}
 
 /* Colors for avatars placeholders */
 .avatar.color-lloyd{background:linear-gradient(180deg,#a7f3d0,#34d399)}
